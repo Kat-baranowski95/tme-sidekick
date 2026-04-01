@@ -1246,91 +1246,79 @@ function renderHome(){
   return w;
 }
 function render() {
-  const app = document.getElementById("app"); app.innerHTML = "";
-  if (!ctx) { app.appendChild(renderSetup()); return; }
-
-  const pct = totalLessons() ? Math.round((totalDone()/totalLessons())*100) : 0;
-
-  // Header
-  const hdr = document.createElement("div"); hdr.id = "header";
-  const toggleBtn = document.createElement("button");
-  toggleBtn.className = "btn-claude-toggle" + (panelOpen?" active":"");
-  toggleBtn.id = "claude-toggle-btn";
-  toggleBtn.innerHTML = `<div class="claude-dot"></div><span>Ask Claude</span>`;
-  toggleBtn.addEventListener("click", togglePanel);
-  hdr.innerHTML = `<div class="hlogo"><span style="font-size:22px">🚀</span>
-    <div><div class="hlogo-title">TME+ Membership Sidekick</div><div class="hlogo-sub">Your companion through every module</div></div></div>
-    <div class="hprog"><div class="hprog-inner">
-      <div class="hprog-label">Overall Progress</div>
-      <div class="hprog-val">${totalDone()} / ${totalLessons()} lessons</div>
-      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
-    </div></div>`;
-  hdr.querySelector(".hprog").insertAdjacentElement("afterbegin", toggleBtn);
+  const app=document.getElementById("app"); app.innerHTML="";
+  if(!ctx){app.appendChild(renderSetup());return;}
+  const pct=totalLessons()?Math.round((totalDone()/totalLessons())*100):0;
+  const hdr=document.createElement("div"); hdr.id="header";
+  const hLeft=document.createElement("div"); hLeft.style.cssText="display:flex;align-items:center;gap:8px";
+  const hlogo=document.createElement("div"); hlogo.className="hlogo";
+  hlogo.innerHTML=`<span style="font-size:22px">🚀</span><div><div class="hlogo-title">TME+ Membership Sidekick</div><div class="hlogo-sub">Your companion through every module</div></div>`;
+  const homeBtn=document.createElement("button");
+  homeBtn.style.cssText="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit";
+  homeBtn.innerHTML="🏠 Home";
+  homeBtn.addEventListener("click",()=>{curView="home";render();});
+  hLeft.appendChild(hlogo); hLeft.appendChild(homeBtn);
+  const hRight=document.createElement("div"); hRight.style.cssText="display:flex;align-items:center;gap:9px";
+  const bpBtn=document.createElement("button");
+  bpBtn.style.cssText="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.75);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit";
+  bpBtn.innerHTML="📋 My Blueprint";
+  bpBtn.addEventListener("click",()=>{
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto";
+    const mo=document.createElement("div");
+    mo.style.cssText="background:#fff;border-radius:16px;padding:32px;max-width:660px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2);margin:auto";
+    const hdrb=document.createElement("div");hdrb.style.cssText="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid #eee;flex-wrap:wrap;gap:10px";
+    hdrb.innerHTML=`<div style="font-size:19px;font-weight:900;color:#1C2B1C">📋 My Membership Blueprint</div><div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1C2B1C;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🖨 Print / Save PDF</button><button id="bpclose" style="background:#f0f2f8;color:#555;border:none;border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit">✕ Close</button></div>`;
+    mo.appendChild(hdrb);
+    const sub=document.createElement("p");sub.style.cssText="font-size:12px;color:#888;margin-bottom:20px";
+    sub.textContent=`${esc(ctx.name)}'s membership blueprint — built through TME+`;mo.appendChild(sub);
+    MODULES.filter(m=>m.ready).forEach(mod=>{
+      const hasAny=(mod.lessons||[]).some(l=>l.tasks.some(t=>answers[`${mod.id}_${l.id}_${t.id}`]));
+      if(!hasAny)return;
+      const ms=document.createElement("div");ms.style.marginBottom="20px";
+      const mh=document.createElement("div");mh.style.cssText=`background:${mod.color};color:#fff;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:4px 10px;border-radius:5px;margin-bottom:10px;display:inline-block`;
+      mh.textContent=`${mod.tag}: ${mod.name}`;ms.appendChild(mh);
+      (mod.lessons||[]).forEach(l=>{
+        l.tasks.forEach(t=>{
+          const key=`${mod.id}_${l.id}_${t.id}`,val=answers[key];
+          if(!val||(typeof val==="string"&&!val.trim())||(Array.isArray(val)&&!val.length))return;
+          const f=document.createElement("div");f.style.cssText="margin-bottom:9px;padding-left:11px;border-left:2px solid #f0f0f0";
+          f.innerHTML=`<div style="font-size:9px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${esc(t.label.replace(/:$/,""))}</div><div style="font-size:12.5px;color:#333;line-height:1.5;white-space:pre-wrap">${esc(Array.isArray(val)?val.join(", "):val)}</div>`;
+          ms.appendChild(f);
+        });
+      });
+      mo.appendChild(ms);
+    });
+    ov.appendChild(mo);ov.addEventListener("click",e=>{if(e.target===ov)document.body.removeChild(ov);});
+    document.body.appendChild(ov);
+    setTimeout(()=>{const cb=document.getElementById("bpclose");if(cb)cb.addEventListener("click",()=>document.body.removeChild(ov));},0);
+  });
+  const toggleBtn=document.createElement("button");
+  toggleBtn.className="btn-claude-toggle"+(panelOpen?" active":"");
+  toggleBtn.id="claude-toggle-btn";
+  toggleBtn.innerHTML=`<div class="claude-dot"></div><span>Ask Claude</span>`;
+  toggleBtn.addEventListener("click",togglePanel);
+  const hprog=document.createElement("div");hprog.style.textAlign="right";
+  hprog.innerHTML=`<div class="hprog-label">PROGRESS</div><div class="hprog-val">${totalDone()} / ${totalLessons()} lessons</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>`;
+  hRight.appendChild(bpBtn);hRight.appendChild(toggleBtn);hRight.appendChild(hprog);
+  hdr.appendChild(hLeft);hdr.appendChild(hRight);
   app.appendChild(hdr);
-
-  const body = document.createElement("div"); body.id = "body-row";
+  const body=document.createElement("div"); body.id="body-row";
   body.appendChild(renderSidebar());
-
-  const content = document.createElement("div"); content.id = "content";
-  content.style.marginRight = panelOpen ? "360px" : "0";
-
-  const mod = MODULES.find(m=>m.id===curMod);
-  if (!mod || !mod.ready || !isModuleUnlocked(curMod)) {
-    content.appendChild(renderComingSoon(mod));
+  const content=document.createElement("div"); content.id="content";
+  content.style.marginRight=panelOpen?"360px":"0";
+  if(curView==="home"){
+    content.style.padding="0";
+    content.appendChild(renderHome());
   } else {
-    const lesson = (mod.lessons||[]).find(l=>l.id===curLes);
-    if (lesson) {
-      if (!isLessonUnlocked(curMod, curLes)) renderLockedLesson(lesson, mod, content);
-      else renderLesson(lesson, mod, content);
-    }
+    const mod=MODULES.find(m=>m.id===curMod);
+    if(!mod||!mod.ready||!isModuleUnlocked(curMod)){content.appendChild(renderComingSoon(mod));}
+    else{const lesson=(mod.lessons||[]).find(l=>l.id===curLes);if(lesson){if(!isLessonUnlocked(curMod,curLes))renderLockedLesson(lesson,mod,content);else renderLesson(lesson,mod,content);}}
   }
   body.appendChild(content);
   app.appendChild(body);
-  if (panelOpen) updatePanelContext();
+  if(panelOpen)updatePanelContext();
 }
-
-// ── Sidebar ────────────────────────────────────────────────────
-function renderSidebar() {
-  const sb = document.createElement("div"); sb.id = "sidebar";
-  MODULES.forEach(mod => {
-    const group   = document.createElement("div"); group.className = "mod-group";
-    const isExp   = !!expanded[mod.id];
-    const modUnlocked = !mod.ready ? false : isModuleUnlocked(mod.id);
-    const mhdr    = document.createElement("div");
-    mhdr.className = "mod-header" + (curMod===mod.id?" active-mod":"") + (!modUnlocked?" locked-mod":"");
-
-    let rightIcon = "";
-    if (!mod.ready) rightIcon = `<span style="font-size:13px">🔒</span>`;
-    else if (!modUnlocked) rightIcon = `<span style="font-size:13px">🔒</span>`;
-    else rightIcon = `<span class="mod-chevron${isExp?" open":""}">›</span>`;
-
-    mhdr.innerHTML = `<div class="mod-dot" style="background:${modUnlocked?mod.color:"#555"}"></div>
-      <div class="mod-info"><div class="mod-tag">${mod.tag}</div><div class="mod-name${modUnlocked?"":" locked"}">${mod.name}</div></div>
-      ${rightIcon}`;
-
-    mhdr.addEventListener("click", () => {
-      if (!mod.ready || !modUnlocked) return;
-      expanded[mod.id] = !expanded[mod.id]; saveExp();
-      if (expanded[mod.id] && mod.lessons?.length) { curMod=mod.id; curLes=mod.lessons[0].id; curTab="do"; }
-      render();
-    });
-    group.appendChild(mhdr);
-
-    if (mod.ready && mod.lessons && modUnlocked) {
-      const list = document.createElement("div"); list.className = "lessons-list";
-      list.style.maxHeight = isExp ? "600px" : "0";
-      mod.lessons.forEach(l => {
-        const lkey      = `${mod.id}_${l.id}`;
-        const lUnlocked = isLessonUnlocked(mod.id, l.id);
-        const isActive  = curMod===mod.id && curLes===l.id;
-        const isDone    = done[lkey];
-        const btn       = document.createElement("button");
-        btn.className   = "lesson-btn" + (isActive?" active":"") + (!lUnlocked?" lesson-locked":"");
-        const icon      = !lUnlocked ? "🔒" : isDone ? "✅" : "○";
-        btn.innerHTML   = `<span class="licon">${icon}</span><div><div class="ltag">${l.tag}</div><div class="ltitle">${l.title}</div>${!l.required?`<span class="optional-badge">optional</span>`:""}</div>`;
-        if (lUnlocked) {
-          btn.addEventListener("click", () => { curMod=mod.id; curLes=l.id; curTab="do"; expanded[mod.id]=true; saveExp(); chatHistory=[]; render(); if(panelOpen)updatePanelContext(); });
-        }
         list.appendChild(btn);
       });
       group.appendChild(list);
