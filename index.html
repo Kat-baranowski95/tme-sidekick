@@ -1187,6 +1187,64 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ── Render ─────────────────────────────────────────────────────
+  const KEY_OUTPUTS=[
+  {mod:"m0",les:"cl4",field:"position",label:"Positioning Statement"},
+  {mod:"m0",les:"cl1",field:"function",label:"Membership Function"},
+  {mod:"m1",les:"cl1",field:"platform",label:"Primary Platform"},
+  {mod:"m2",les:"cl3",field:"path_name",label:"Success Path™ Name"},
+  {mod:"m3",les:"cl2",field:"model_choice",label:"Marketing Model"},
+  {mod:"m4",les:"cl1",field:"style_pick",label:"Launch Style"},
+  {mod:"m6",les:"cl4",field:"pricing_plan",label:"Pricing Plan"},
+];
+function ga(m,l,f){return answers[`${m}_${l}_${f}`]||null;}
+function findNext(){for(const m of MODULES){if(!m.ready||!isModuleUnlocked(m.id))continue;for(const l of(m.lessons||[])){if(!done[`${m.id}_${l.id}`])return{mod:m,les:l};}}return null;}
+function renderHome(){
+  const w=document.createElement("div");w.style.cssText="padding:22px 26px;overflow-y:auto;flex:1";
+  const name=ctx.name||"there";
+  const pct=totalLessons()?Math.round((totalDone()/totalLessons())*100):0;
+  w.innerHTML=`<div style="font-size:21px;font-weight:900;color:#1C2B1C;margin-bottom:3px">Welcome back, ${esc(name)} 👋</div><div style="font-size:13px;color:#888;margin-bottom:20px">${totalDone()} of ${totalLessons()} lessons complete — ${pct}% of the program</div>`;
+  const nx=findNext();
+  const cb=document.createElement("button");
+  cb.style.cssText="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#F07830,#e06820);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:26px;box-shadow:0 4px 12px rgba(240,120,48,.3)";
+  if(nx){cb.textContent=`▶ Continue — ${nx.mod.tag}: ${nx.les.title}`;cb.addEventListener("click",()=>{curMod=nx.mod.id;curLes=nx.les.id;curTab="do";curView="lesson";expanded[nx.mod.id]=true;saveExp();render();});}
+  else{cb.textContent="🎉 All modules complete!";cb.style.background="linear-gradient(135deg,#5ABF59,#3a9939)";}
+  w.appendChild(cb);
+  const mt=document.createElement("div");mt.style.cssText="font-size:10px;font-weight:800;color:#bbb;letter-spacing:.8px;text-transform:uppercase;margin-bottom:11px";mt.textContent="Your Modules";w.appendChild(mt);
+  const mc=document.createElement("div");mc.style.cssText="display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:10px;margin-bottom:24px";
+  MODULES.forEach(mod=>{
+    const unlocked=mod.ready&&isModuleUnlocked(mod.id);
+    const card=document.createElement("div");
+    card.style.cssText=`background:#fff;border-radius:11px;padding:14px 15px;box-shadow:0 1px 6px rgba(0,0,0,.06);border:2px solid transparent;${unlocked?"cursor:pointer;transition:all .18s":"opacity:.4"}`;
+    const lessons=mod.lessons||[];const tot=lessons.length;
+    const dc=lessons.filter(l=>done[`${mod.id}_${l.id}`]).length;
+    const p=tot?Math.round((dc/tot)*100):0;
+    const barBg=document.createElement("div");barBg.style.cssText="height:3px;background:#f0f0f0;border-radius:3px;margin-bottom:11px";
+    if(unlocked&&tot){const bf=document.createElement("div");bf.style.cssText=`height:100%;border-radius:3px;background:${mod.color};width:${p}%`;barBg.appendChild(bf);}
+    card.appendChild(barBg);
+    card.innerHTML+=`<div style="font-size:9px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:#bbb;margin-bottom:2px">${mod.tag}</div><div style="font-size:13px;font-weight:800;color:#1C2B1C;margin-bottom:8px">${mod.name}</div>`;
+    if(unlocked&&tot){
+      const pg=document.createElement("div");pg.style.cssText="font-size:11px;color:#aaa;display:flex;justify-content:space-between";
+      pg.innerHTML=`<span>${dc}/${tot} lessons</span><span style="color:${mod.color};font-weight:800">${p}%</span>`;
+      card.appendChild(pg);if(p===100)card.style.borderColor="#5ABF59";
+      card.addEventListener("click",()=>{curMod=mod.id;const fi=(mod.lessons||[]).find(l=>!done[`${mod.id}_${l.id}`]);curLes=fi?fi.id:mod.lessons[0].id;curTab="do";curView="lesson";expanded[mod.id]=true;saveExp();render();});
+    }else{const inf=document.createElement("div");inf.style.cssText="font-size:11px;color:#bbb;font-style:italic";inf.textContent=!mod.ready?"Coming soon":"🔒 Complete previous module";card.appendChild(inf);}
+    mc.appendChild(card);
+  });
+  w.appendChild(mc);
+  const filled=KEY_OUTPUTS.filter(o=>ga(o.mod,o.les,o.field));
+  if(filled.length){
+    const ot=document.createElement("div");ot.style.cssText="font-size:10px;font-weight:800;color:#bbb;letter-spacing:.8px;text-transform:uppercase;margin-bottom:11px";ot.textContent="Your Key Outputs";w.appendChild(ot);
+    const oc=document.createElement("div");oc.style.cssText="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px";
+    filled.forEach(o=>{
+      const val=ga(o.mod,o.les,o.field);
+      const c=document.createElement("div");c.style.cssText="background:#fff;border-radius:10px;padding:13px 15px;box-shadow:0 1px 5px rgba(0,0,0,.05);border-left:3px solid #F07830";
+      c.innerHTML=`<div style="font-size:9.5px;font-weight:800;color:#F07830;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">${o.label}</div><div style="font-size:12.5px;color:#444;line-height:1.5;max-height:55px;overflow:hidden">${esc(Array.isArray(val)?val.join(", "):val)}</div>`;
+      oc.appendChild(c);
+    });
+    w.appendChild(oc);
+  }
+  return w;
+}
 function render() {
   const app = document.getElementById("app"); app.innerHTML = "";
   if (!ctx) { app.appendChild(renderSetup()); return; }
