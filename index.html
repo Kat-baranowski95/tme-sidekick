@@ -1021,6 +1021,7 @@ let copied   = {};
 let panelOpen    = false;
 let chatHistory  = [];
 let chatTyping   = false;
+let curView      = "home";
 
 function saveCtx()  { localStorage.setItem(SK_CTX,  JSON.stringify(ctx));     }
 function saveAns()  { localStorage.setItem(SK_ANS,  JSON.stringify(answers)); }
@@ -1207,7 +1208,13 @@ function render() {
       <div class="hprog-val">${totalDone()} / ${totalLessons()} lessons</div>
       <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
     </div></div>`;
+  const homeBtn = document.createElement("button");
+  homeBtn.className = "btn-home" + (curView==="home"?" ah":"");
+  homeBtn.innerHTML = `<span>🏠</span><span>Dashboard</span>`;
+  homeBtn.addEventListener("click", () => { curView="home"; render(); });
+
   hdr.querySelector(".hprog").insertAdjacentElement("afterbegin", toggleBtn);
+  hdr.querySelector(".hprog").insertAdjacentElement("afterbegin", homeBtn);
   app.appendChild(hdr);
 
   const body = document.createElement("div"); body.id = "body-row";
@@ -1216,14 +1223,18 @@ function render() {
   const content = document.createElement("div"); content.id = "content";
   content.style.marginRight = panelOpen ? "360px" : "0";
 
-  const mod = MODULES.find(m=>m.id===curMod);
-  if (!mod || !mod.ready || !isModuleUnlocked(curMod)) {
-    content.appendChild(renderComingSoon(mod));
+  if (curView === "home") {
+    renderHome(content);
   } else {
-    const lesson = (mod.lessons||[]).find(l=>l.id===curLes);
-    if (lesson) {
-      if (!isLessonUnlocked(curMod, curLes)) renderLockedLesson(lesson, mod, content);
-      else renderLesson(lesson, mod, content);
+    const mod = MODULES.find(m=>m.id===curMod);
+    if (!mod || !mod.ready || !isModuleUnlocked(curMod)) {
+      content.appendChild(renderComingSoon(mod));
+    } else {
+      const lesson = (mod.lessons||[]).find(l=>l.id===curLes);
+      if (lesson) {
+        if (!isLessonUnlocked(curMod, curLes)) renderLockedLesson(lesson, mod, content);
+        else renderLesson(lesson, mod, content);
+      }
     }
   }
   body.appendChild(content);
@@ -1253,7 +1264,7 @@ function renderSidebar() {
     mhdr.addEventListener("click", () => {
       if (!mod.ready || !modUnlocked) return;
       expanded[mod.id] = !expanded[mod.id]; saveExp();
-      if (expanded[mod.id] && mod.lessons?.length) { curMod=mod.id; curLes=mod.lessons[0].id; curTab="do"; }
+      if (expanded[mod.id] && mod.lessons?.length) { curView="lesson"; curMod=mod.id; curLes=mod.lessons[0].id; curTab="do"; }
       render();
     });
     group.appendChild(mhdr);
@@ -1264,14 +1275,14 @@ function renderSidebar() {
       mod.lessons.forEach(l => {
         const lkey      = `${mod.id}_${l.id}`;
         const lUnlocked = isLessonUnlocked(mod.id, l.id);
-        const isActive  = curMod===mod.id && curLes===l.id;
+        const isActive  = curView==="lesson" && curMod===mod.id && curLes===l.id;
         const isDone    = done[lkey];
         const btn       = document.createElement("button");
         btn.className   = "lesson-btn" + (isActive?" active":"") + (!lUnlocked?" lesson-locked":"");
         const icon      = !lUnlocked ? "🔒" : isDone ? "✅" : "○";
         btn.innerHTML   = `<span class="licon">${icon}</span><div><div class="ltag">${l.tag}</div><div class="ltitle">${l.title}</div>${!l.required?`<span class="optional-badge">optional</span>`:""}</div>`;
         if (lUnlocked) {
-          btn.addEventListener("click", () => { curMod=mod.id; curLes=l.id; curTab="do"; expanded[mod.id]=true; saveExp(); chatHistory=[]; render(); if(panelOpen)updatePanelContext(); });
+          btn.addEventListener("click", () => { curView="lesson"; curMod=mod.id; curLes=l.id; curTab="do"; expanded[mod.id]=true; saveExp(); chatHistory=[]; render(); if(panelOpen)updatePanelContext(); });
         }
         list.appendChild(btn);
       });
@@ -1475,7 +1486,197 @@ function renderDo(lesson, mod, lkey, wrap) {
     if (done[k] && nextLes) { curLes=nextLes.id; curTab="learn"; chatHistory=[]; }
     render(); if(panelOpen) updatePanelContext();
   });
-  nav.appendChild(doneBtn); wrap.appendChild(nav);
+  nav.appendChild(doneBtn);
+
+  // Download button when module cores are complete
+  if (allCoresDone(curMod)) {
+    const dlBtn = document.createElement("button");
+    dlBtn.className = "btn-nav btn-prev";
+    dlBtn.style.cssText = "display:flex;align-items:center;gap:5px";
+    dlBtn.innerHTML = "📥 Download Module Progress";
+    dlBtn.addEventListener("click", () => downloadModuleProgress(curMod));
+    nav.appendChild(dlBtn);
+  }
+
+  wrap.appendChild(nav);
+}
+
+// ── Home / Dashboard ───────────────────────────────────────────
+function renderHome(content) {
+  const hw = document.createElement("div"); hw.className = "hw";
+
+  // Find where to continue
+  let continueModId = null, continueLesId = null;
+  for (const mod of MODULES.filter(m=>m.ready && isModuleUnlocked(m.id))) {
+    for (const l of (mod.lessons||[])) {
+      if (!done[`${mod.id}_${l.id}`] && isLessonUnlocked(mod.id, l.id)) {
+        continueModId = mod.id; continueLesId = l.id; break;
+      }
+    }
+    if (continueModId) break;
+  }
+
+  const pct = totalLessons() ? Math.round((totalDone()/totalLessons())*100) : 0;
+  const greeting = document.createElement("div"); greeting.className = "hg";
+  greeting.textContent = `Welcome back, ${ctx?.name || "there"}!`;
+  hw.appendChild(greeting);
+
+  const sub = document.createElement("div"); sub.className = "hsubg";
+  sub.textContent = `You've completed ${totalDone()} of ${totalLessons()} lessons (${pct}%)`;
+  hw.appendChild(sub);
+
+  if (continueModId) {
+    const cMod = MODULES.find(m=>m.id===continueModId);
+    const cLes = (cMod?.lessons||[]).find(l=>l.id===continueLesId);
+    const cont = document.createElement("button"); cont.className = "hcont";
+    cont.innerHTML = `Continue: ${cMod?.tag} — ${cLes?.title} →`;
+    cont.addEventListener("click", () => {
+      curView="lesson"; curMod=continueModId; curLes=continueLesId; curTab="learn";
+      expanded[continueModId]=true; saveExp(); chatHistory=[]; render();
+    });
+    hw.appendChild(cont);
+  }
+
+  // Module cards
+  const st = document.createElement("div"); st.className = "hst"; st.textContent = "YOUR MODULES";
+  hw.appendChild(st);
+
+  const grid = document.createElement("div"); grid.className = "mcards";
+  MODULES.forEach(mod => {
+    const card = document.createElement("div");
+    const modUnlocked = mod.ready && isModuleUnlocked(mod.id);
+    card.className = "mcard" + (!modUnlocked?" mlk":"");
+
+    const lessons = mod.lessons || [];
+    const doneCnt = lessons.filter(l => done[`${mod.id}_${l.id}`]).length;
+    const totalCnt = lessons.length;
+    const modPct = totalCnt ? Math.round((doneCnt/totalCnt)*100) : 0;
+
+    const bar = document.createElement("div"); bar.className = "mcbar-bg";
+    const fill = document.createElement("div"); fill.className = "mcbar-fill";
+    fill.style.width = modPct + "%"; fill.style.background = mod.color;
+    bar.appendChild(fill); card.appendChild(bar);
+
+    const tag = document.createElement("div"); tag.className = "mctag"; tag.textContent = mod.tag;
+    const name = document.createElement("div"); name.className = "mcname"; name.textContent = mod.name;
+    const prog = document.createElement("div"); prog.className = "mcprog";
+    prog.innerHTML = `<span>${doneCnt}/${totalCnt} lessons</span><span>${modPct}%</span>`;
+    card.appendChild(tag); card.appendChild(name); card.appendChild(prog);
+
+    // Download button for completed modules
+    if (modUnlocked && doneCnt > 0 && allCoresDone(mod.id)) {
+      const dl = document.createElement("button");
+      dl.style.cssText = "margin-top:8px;width:100%;background:#f0f2f8;color:#555;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s";
+      dl.textContent = "📥 Download Progress";
+      dl.addEventListener("click", (e) => { e.stopPropagation(); downloadModuleProgress(mod.id); });
+      card.appendChild(dl);
+    }
+
+    if (modUnlocked) {
+      card.addEventListener("click", () => {
+        curView="lesson"; curMod=mod.id; curLes=(mod.lessons||[])[0]?.id||"cl1"; curTab="learn";
+        expanded[mod.id]=true; saveExp(); chatHistory=[]; render();
+      });
+    }
+    grid.appendChild(card);
+  });
+  hw.appendChild(grid);
+
+  // Recent answers overview
+  const answeredMods = MODULES.filter(m => m.ready && (m.lessons||[]).some(l => l.tasks.some(t => {
+    const v = answers[`${m.id}_${l.id}_${t.id}`];
+    return v && (typeof v === "string" ? v.trim() : v.length);
+  })));
+  if (answeredMods.length) {
+    const ost = document.createElement("div"); ost.className = "hst"; ost.textContent = "YOUR KEY DECISIONS";
+    hw.appendChild(ost);
+    const ocards = document.createElement("div"); ocards.className = "ocards";
+    answeredMods.forEach(mod => {
+      (mod.lessons||[]).forEach(l => {
+        const lkey = `${mod.id}_${l.id}`;
+        l.tasks.forEach(t => {
+          const v = answers[`${lkey}_${t.id}`];
+          if (!v || (typeof v==="string" && !v.trim()) || (Array.isArray(v) && !v.length)) return;
+          const display = Array.isArray(v) ? v.join(", ") : v;
+          if (display.length < 5) return;
+          const oc = document.createElement("div"); oc.className = "ocard";
+          oc.addEventListener("click", () => {
+            curView="lesson"; curMod=mod.id; curLes=l.id; curTab="do";
+            expanded[mod.id]=true; saveExp(); chatHistory=[]; render();
+          });
+          const olbl = document.createElement("div"); olbl.className = "olbl"; olbl.textContent = `${mod.tag} · ${l.title}`;
+          const oval = document.createElement("div"); oval.className = "oval"; oval.textContent = display.length > 120 ? display.slice(0,120)+"…" : display;
+          oc.appendChild(olbl); oc.appendChild(oval); ocards.appendChild(oc);
+        });
+      });
+    });
+    // Only show first 8
+    while (ocards.children.length > 8) ocards.removeChild(ocards.lastChild);
+    hw.appendChild(ocards);
+  }
+
+  content.appendChild(hw);
+}
+
+// ── Download Progress ──────────────────────────────────────────
+function downloadModuleProgress(modId) {
+  const mod = MODULES.find(m=>m.id===modId);
+  if (!mod) return;
+
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${mod.tag}: ${mod.name} — Progress Report</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Georgia,serif;max-width:700px;margin:0 auto;padding:40px 30px;color:#222;line-height:1.7}
+  h1{font-size:24px;font-weight:900;color:#1C2B1C;margin-bottom:4px;font-family:system-ui,sans-serif}
+  .sub{font-size:13px;color:#888;margin-bottom:30px;border-bottom:2px solid ${mod.color};padding-bottom:14px}
+  .ctx{font-size:12px;color:#666;background:#f8f9fa;padding:12px 16px;border-radius:8px;margin-bottom:28px;line-height:1.8}
+  .ctx strong{color:#1C2B1C}
+  h2{font-size:16px;font-weight:800;color:${mod.color};margin:28px 0 4px;font-family:system-ui,sans-serif;border-left:3px solid ${mod.color};padding-left:10px}
+  h3{font-size:13px;font-weight:700;color:#1C2B1C;margin:16px 0 6px;font-family:system-ui,sans-serif}
+  .answer{font-size:13px;color:#333;background:#f5f6fa;padding:10px 14px;border-radius:6px;margin-bottom:12px;white-space:pre-wrap;border-left:2px solid #ddd}
+  .empty{font-size:12px;color:#ccc;font-style:italic;margin-bottom:12px}
+  .done-badge{display:inline-block;background:#d1fae5;color:#065f46;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;font-family:system-ui,sans-serif}
+  .footer{margin-top:40px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#bbb;text-align:center}
+  @media print{body{padding:20px}h2{break-before:auto}@page{margin:1.5cm}}
+</style></head><body>`;
+
+  html += `<h1>${esc(mod.tag)}: ${esc(mod.name)}</h1>`;
+  html += `<div class="sub">TME+ Membership Sidekick — Progress Report · Generated ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>`;
+  html += `<div class="ctx"><strong>Name:</strong> ${esc(ctx?.name||"—")}<br><strong>Target Market:</strong> ${esc(ctx?.market||"—")}<br><strong>Focus:</strong> ${esc(ctx?.focus||"—")}<br><strong>Identity:</strong> ${esc(ctx?.identity||"—")}</div>`;
+
+  (mod.lessons||[]).forEach(l => {
+    const lkey = `${mod.id}_${l.id}`;
+    const isDone = done[lkey];
+    const hasAnswers = l.tasks.some(t => {
+      const v = answers[`${lkey}_${t.id}`];
+      return v && (typeof v==="string" ? v.trim() : v.length);
+    });
+    if (!hasAnswers && !isDone) return;
+
+    html += `<h2>${esc(l.tag)}: ${esc(l.title)}${isDone?'<span class="done-badge">COMPLETE</span>':""}</h2>`;
+
+    l.tasks.forEach(t => {
+      const v = answers[`${lkey}_${t.id}`];
+      const display = v ? (Array.isArray(v) ? v.join(", ") : v) : "";
+      html += `<h3>${esc(t.label)}</h3>`;
+      if (display.trim()) {
+        html += `<div class="answer">${esc(display)}</div>`;
+      } else {
+        html += `<div class="empty">Not yet answered</div>`;
+      }
+    });
+  });
+
+  html += `<div class="footer">Generated by TME+ Membership Sidekick · ${esc(ctx?.name||"")} · ${new Date().toLocaleDateString()}</div>`;
+  html += `</body></html>`;
+
+  const blob = new Blob([html], {type:"text/html"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${mod.tag.replace(/\s+/g,"-")}_${mod.name}_Progress.html`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Setup ──────────────────────────────────────────────────────
@@ -1498,7 +1699,7 @@ function renderSetup() {
   });
 
   const btn=document.createElement("button"); btn.className="btn-primary"; btn.textContent="Let's Get Started →"; btn.disabled=true;
-  btn.addEventListener("click",()=>{ctx={...form};saveCtx();curMod="m0";curLes="cl1";curTab="learn";expanded={m0:true};saveExp();render();});
+  btn.addEventListener("click",()=>{ctx={...form};saveCtx();curView="home";curMod="m0";curLes="cl1";curTab="learn";expanded={m0:true};saveExp();render();});
   card.appendChild(btn);
 
   const note=document.createElement("p"); note.style.cssText="text-align:center;font-size:11px;color:#bbb;margin-top:10px"; note.textContent="You can update this anytime from the sidebar. Your answers save automatically.";
@@ -1510,6 +1711,3 @@ render();
 </script>
 </body>
 </html>
-let panelOpen    = false;
-let curView="home"; 
-let showBP=false;
